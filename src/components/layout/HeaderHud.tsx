@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
+  Database,
+  Loader2,
   Sparkles,
   User,
   Zap,
@@ -19,6 +21,12 @@ export const HeaderHud: React.FC = () => {
     pingMs,
     ipcConnected,
     jumpToSpike,
+    connectionMode,
+    setConnectionMode,
+    backendOnline,
+    seedBackend,
+    isBackendSeeding,
+    lastSyncTimestamp,
   } = useTelemetryStore();
 
   const [utcTime, setUtcTime] = useState('');
@@ -50,8 +58,8 @@ export const HeaderHud: React.FC = () => {
     <header className="w-full bg-[#0B0E14] border-b border-[#1F293D] select-none">
       {/* Top Main Status Bar */}
       <div className="px-4 py-2.5 flex flex-wrap items-center justify-between gap-4 border-b border-[#182030]">
-        {/* Left: Branding & WebSocket IPC indicator */}
-        <div className="flex items-center gap-4">
+        {/* Left: Branding & WebSocket IPC indicator & Backend Status */}
+        <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded border border-[#00E5FF]/50 bg-[#00E5FF]/10 flex items-center justify-center text-[#00E5FF] shadow-[0_0_10px_rgba(0,229,255,0.3)]">
               <Activity className="w-4 h-4" />
@@ -66,7 +74,8 @@ export const HeaderHud: React.FC = () => {
                   TACTICAL TELEMETRY HUD
                 </span>
               </div>
-              <div className="flex items-center gap-2 text-[10px] text-[#8899A6] font-mono-numbers mt-0.5">
+              <div className="flex items-center gap-2 text-[10px] text-[#8899A6] font-mono-numbers mt-0.5 flex-wrap">
+                {/* IPC WebSocket */}
                 <div className="flex items-center gap-1.5 px-1.5 py-0.5 bg-[#121721] border border-[#1F293D] rounded-sm">
                   <StatusBeacon
                     color={ipcConnected ? 'cyan' : 'crimson'}
@@ -78,6 +87,46 @@ export const HeaderHud: React.FC = () => {
                   </span>
                 </div>
                 <span className="text-[#00FFA3] font-mono">[{pingMs}ms ping]</span>
+
+                {/* Live Backend Indicator & Mode Switcher */}
+                <div className="flex items-center gap-1.5 px-1.5 py-0.5 bg-[#121721] border border-[#1F293D] rounded-sm">
+                  <StatusBeacon
+                    color={connectionMode === 'live' && backendOnline ? 'emerald' : 'amber'}
+                    size="sm"
+                  />
+                  <span className="text-[#F0F4FC]">
+                    API: {connectionMode === 'live' ? '136.80.94.125:8081' : 'DEMO MOCK'}
+                  </span>
+                  {lastSyncTimestamp && connectionMode === 'live' && (
+                    <span className="text-[#52637A]">({lastSyncTimestamp})</span>
+                  )}
+                </div>
+
+                {/* Mode Toggle Button */}
+                <button
+                  onClick={() => setConnectionMode(connectionMode === 'live' ? 'mock' : 'live')}
+                  className="px-1.5 py-0.5 bg-[#161D2B] hover:bg-[#1F293D] text-[#00E5FF] hover:text-white border border-[#1F293D] rounded-xs font-mono text-[9px] cursor-pointer transition"
+                  title="Toggle between Live API and offline demo mock data"
+                >
+                  [{connectionMode === 'live' ? 'SWITCH TO MOCK' : 'SWITCH TO LIVE'}]
+                </button>
+
+                {/* Seed Dev DB Button */}
+                {connectionMode === 'live' && (
+                  <button
+                    onClick={seedBackend}
+                    disabled={isBackendSeeding}
+                    className="flex items-center gap-1 px-1.5 py-0.5 bg-[#00FFA3]/10 hover:bg-[#00FFA3]/20 text-[#00FFA3] border border-[#00FFA3]/40 rounded-xs font-mono text-[9px] cursor-pointer transition"
+                    title="Seed backend database with 40 synthetic frame samples via POST /dev/seed"
+                  >
+                    {isBackendSeeding ? (
+                      <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                    ) : (
+                      <Database className="w-2.5 h-2.5" />
+                    )}
+                    <span>{isBackendSeeding ? 'SEEDING...' : 'SEED DB'}</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>

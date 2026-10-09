@@ -7,6 +7,12 @@ import {
   initialSubsystemMetrics,
   initialTesters,
 } from '../mock/mockTelemetryData';
+import {
+  mapHotspotsDtoToHotspotItems,
+  mapReportDtoToAIDiagnosis,
+  mapTesterDtoToTesterNode,
+} from '../services/api/adapters';
+import { telemetryApi } from '../services/api/telemetryApi';
 import type {
   AIDiagnosis,
   CallTreeNode,
@@ -18,6 +24,7 @@ import type {
 
 export type TimeWindow = '60s' | '5m' | 'session';
 export type NavTab = 'telemetry' | 'squad' | 'ai-studio' | 'calltree';
+export type ConnectionMode = 'live' | 'mock';
 
 interface TelemetryState {
   // State
@@ -48,6 +55,12 @@ interface TelemetryState {
   pingMs: number;
   samplingFrequency: string;
 
+  // Live Backend Integration State
+  connectionMode: ConnectionMode;
+  backendOnline: boolean;
+  isBackendSeeding: boolean;
+  lastSyncTimestamp: string | null;
+
   // Actions
   setSelectedTester: (id: string) => void;
   setSelectedFrame: (frameNumber: number) => void;
@@ -59,13 +72,18 @@ interface TelemetryState {
   setCallTreeDrawerOpen: (open: boolean) => void;
   toggleSimulateBudget: () => void;
   toggleABBenchmark: () => void;
-  runAIDiagnosticEngine: () => void;
+  runAIDiagnosticEngine: () => Promise<void>;
   pushPatchToUnity: () => void;
   resortHotspots: () => void;
   jumpToSpike: (frameNumber?: number) => void;
   exportTracyTrace: () => void;
   generateLLMFixLog: () => void;
   tickLiveData: () => void;
+
+  // Backend Actions
+  setConnectionMode: (mode: ConnectionMode) => void;
+  fetchLiveTelemetry: () => Promise<void>;
+  seedBackend: () => Promise<void>;
 }
 
 export const useTelemetryStore = create<TelemetryState>((set, get) => ({
@@ -96,16 +114,20 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   pingMs: 1.2,
   samplingFrequency: '1,201,000 SAMPLES/SEC',
 
+  connectionMode: 'live',
+  backendOnline: true,
+  isBackendSeeding: false,
+  lastSyncTimestamp: null,
+
   setSelectedTester: (id: string) => {
     set((state) => {
       const tester = state.testers.find((t) => t.id === id);
       if (!tester) return { selectedTesterId: id };
 
-      // Adapt timeline if another tester is clicked
       if (id !== 'TESTER-02') {
         const frames = state.timelineFrames.map((f, idx) => ({
           ...f,
-          totalFrameMs: parseFloat((tester.frameTimeMs + (Math.sin(idx) * 0.4)).toFixed(1)),
+          totalFrameMs: parseFloat((tester.frameTimeMs + Math.sin(idx) * 0.4).toFixed(1)),
           cpuMainMs: parseFloat((tester.frameTimeMs * 0.65).toFixed(1)),
           renderThreadMs: parseFloat((tester.frameTimeMs * 0.25).toFixed(1)),
           gpuMs: parseFloat((tester.frameTimeMs * 0.1).toFixed(1)),
@@ -163,8 +185,135 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
     set((state) => ({ isABBenchmarking: !state.isABBenchmarking }));
   },
 
-  runAIDiagnosticEngine: () => {
+  setConnectionMode: (connectionMode: ConnectionMode) => {
+    set({ connectionMode });
+    if (connectionMode === 'live') {
+      get().fetchLiveTelemetry();
+    } else {
+      set({
+        testers: initialTesters,
+        hotspots: initialHotspots,
+        diagnoses: initialDiagnoses,
+      });
+    }
+  },
+
+  fetchLiveTelemetry: async () => {
+    const { connectionMode } = get();
+    if (connectionMode !== 'live') return;
+
+    try {
+      const [testersDto, hotspotsDto] = await Promise.all([
+        telemetryApi.getTesters().catch(() => null),
+        telemetryApi.getHotspots().catch(() => null),
+      ]);
+
+      const now = new Date().toISOString().substring(11, 19);
+
+      if (testersDto && testersDto.length > 0) {
+        const mappedTesters = testersDto.map((t, idx) => mapTesterDtoToTesterNode(t, idx));
+        set({
+          testers: mappedTesters,
+          backendOnline: true,
+          lastSyncTimestamp: now,
+        });
+      }
+
+      if (hotspotsDto && hotspotsDto.hotspots && hotspotsDto.hotspots.length > 0) {
+        const mappedHotspots = mapHotspotsDtoToHotspotItems(hotspotsDto.hotspots);
+        set((state) => ({
+          hotspots: mappedHotspots,
+          backendOnline: true,
+          lastSyncTimestamp: now,
+          subsystems: state.subsystems.map((sub) => {
+            if (sub.name === 'MAIN THREAD') {
+              const peakMs = hotspotsDto.hotspots[0]?.maxSelfMs || 84.6;
+              return {
+                ...sub,
+                value: `${peakMs.toFixed(1)}ms`,
+                numericVal: peakMs,
+              };
+            }
+            return sub;
+          }),
+        }));
+      }
+
+      // Check report if present
+      const reportDto = await telemetryApi.getReport().catch(() => null);
+      if (reportDto && reportDto.findings && reportDto.findings.length > 0) {
+        const updatedDiag = mapReportDtoToAIDiagnosis(reportDto, hotspotsDto?.hotspots?.[0]);
+        set((state) => ({
+          diagnoses: {
+            ...state.diagnoses,
+            'diag-enemyai': updatedDiag,
+          },
+        }));
+      }
+    } catch {
+      set({ backendOnline: false });
+    }
+  },
+
+  seedBackend: async () => {
+    set({ isBackendSeeding: true });
+    try {
+      await telemetryApi.seedDatabase();
+      await get().fetchLiveTelemetry();
+    } catch {
+      // Graceful error handle
+    } finally {
+      set({ isBackendSeeding: false });
+    }
+  },
+
+  runAIDiagnosticEngine: async () => {
     set({ isEngineScanning: true });
+    const { connectionMode } = get();
+
+    if (connectionMode === 'live') {
+      try {
+        await telemetryApi.triggerAnalyze();
+
+        // Poll for report completion
+        let retries = 0;
+        const maxRetries = 5;
+        const pollInterval = setInterval(async () => {
+          retries++;
+          try {
+            const report = await telemetryApi.getReport();
+            if ((report && report.findings && report.findings.length > 0) || retries >= maxRetries) {
+              clearInterval(pollInterval);
+              if (report && report.findings && report.findings.length > 0) {
+                const hotspots = await telemetryApi.getHotspots().catch(() => null);
+                const updatedDiag = mapReportDtoToAIDiagnosis(report, hotspots?.hotspots?.[0]);
+                set((state) => ({
+                  diagnoses: {
+                    ...state.diagnoses,
+                    'diag-enemyai': updatedDiag,
+                  },
+                }));
+              }
+              set({
+                isEngineScanning: false,
+                activeTab: 'telemetry',
+                selectedHotspotId: 'hotspot-1',
+              });
+            }
+          } catch {
+            if (retries >= maxRetries) {
+              clearInterval(pollInterval);
+              set({ isEngineScanning: false });
+            }
+          }
+        }, 1000);
+        return;
+      } catch {
+        // Fallback to local sequence if live analyze throws
+      }
+    }
+
+    // Local fallback animation
     setTimeout(() => {
       set({
         isEngineScanning: false,
@@ -183,7 +332,6 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
         patchPushed: true,
         lastPatchTimestamp: now,
       });
-      // After patch pushed, simulate budget improvement
       setTimeout(() => {
         set((state) => ({
           isSimulatingBudget: true,
@@ -216,7 +364,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
       selectedFrameNumber: frameNumber,
       timelineFrames: generateTimelineFrames(),
       selectedHotspotId: 'hotspot-1',
-      isLive: false, // freeze on spike so user inspects it
+      isLive: false,
     });
   },
 
@@ -256,15 +404,18 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   },
 
   tickLiveData: () => {
-    const { isLive, selectedTesterId } = get();
+    const { isLive, selectedTesterId, connectionMode } = get();
     if (!isLive) return;
 
+    if (connectionMode === 'live') {
+      get().fetchLiveTelemetry();
+      return;
+    }
+
     set((state) => {
-      // Random ping flutter
       const pingDrift = +(1.1 + Math.random() * 0.3).toFixed(1);
-      // Gentle jitter for testers
       const updatedTesters = state.testers.map((t) => {
-        if (t.id === selectedTesterId && t.hasSpike) return t; // preserve spike for demo
+        if (t.id === selectedTesterId && t.hasSpike) return t;
         const delta = (Math.random() - 0.5) * 0.3;
         const newFps = +(t.fps + delta).toFixed(1);
         return {

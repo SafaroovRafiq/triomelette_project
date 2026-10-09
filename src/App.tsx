@@ -10,15 +10,16 @@ import { Container } from './components/layout/Container';
 import { useTelemetryStore } from './store/useTelemetryStore';
 
 export const App: React.FC = () => {
-  const { activeTab, tickLiveData, isEngineScanning } = useTelemetryStore();
+  const { activeTab, tickLiveData, isEngineScanning, fetchLiveTelemetry } = useTelemetryStore();
 
-  // Heartbeat live simulation loop
+  // Initial fetch and live simulation loop
   useEffect(() => {
+    fetchLiveTelemetry();
     const interval = setInterval(() => {
       tickLiveData();
-    }, 1500);
+    }, 2500);
     return () => clearInterval(interval);
-  }, [tickLiveData]);
+  }, [fetchLiveTelemetry, tickLiveData]);
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-[#F0F4FC] flex flex-col relative overflow-x-hidden selection:bg-[#00E5FF]/20 selection:text-[#00E5FF]">
