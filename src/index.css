@@ -1,0 +1,187 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-void: #0B0E14;
+    --panel-surface: #121721;
+    --panel-surface-elevated: #161D2B;
+    --panel-border: #1F293D;
+    --panel-border-bright: #2B3A55;
+    
+    --neon-emerald: #00FFA3;
+    --neon-amber: #FFB020;
+    --neon-crimson: #FF3366;
+    --neon-cyan: #00E5FF;
+
+    --text-primary: #F0F4FC;
+    --text-secondary: #8899A6;
+    --text-tertiary: #52637A;
+
+    --font-tech: 'Chakra Petch', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Share Tech Mono', monospace;
+  }
+
+  body {
+    background-color: var(--bg-void);
+    color: var(--text-primary);
+    font-family: var(--font-tech);
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Custom Tech Scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0B0E14;
+    border-left: 1px solid #1F293D;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #1F293D;
+    border-radius: 0px;
+    border: 1px solid #2B3A55;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #00E5FF;
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+  }
+}
+
+/* Cyber HUD utilities */
+.font-mono-numbers {
+  font-family: 'JetBrains Mono', 'Share Tech Mono', monospace;
+  font-feature-settings: 'tnum' on, 'zero' on;
+}
+
+.font-tech-display {
+  font-family: 'Chakra Petch', sans-serif;
+}
+
+/* Cyber chamfered corners */
+.chamfer-sm {
+  clip-path: polygon(
+    0 4px,
+    4px 0,
+    calc(100% - 4px) 0,
+    100% 4px,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    4px 100%,
+    0 calc(100% - 4px)
+  );
+}
+
+.chamfer-corner-tr {
+  clip-path: polygon(
+    0 0,
+    calc(100% - 10px) 0,
+    100% 10px,
+    100% 100%,
+    0 100%
+  );
+}
+
+.chamfer-btn {
+  clip-path: polygon(
+    0 0,
+    calc(100% - 8px) 0,
+    100% 8px,
+    100% 100%,
+    8px 100%,
+    0 calc(100% - 8px)
+  );
+}
+
+/* HUD Panels & Glows */
+.hud-panel {
+  background-color: #121721;
+  border: 1px solid #1F293D;
+  position: relative;
+}
+
+.hud-panel:hover {
+  border-color: #2D3A52;
+}
+
+.hud-panel-crimson {
+  background-color: #151016;
+  border: 1px solid rgba(255, 51, 102, 0.4);
+  box-shadow: 0 0 15px rgba(255, 51, 102, 0.08);
+}
+
+.hud-panel-cyan {
+  background-color: #0F1722;
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.08);
+}
+
+.hud-glow-emerald {
+  box-shadow: 0 0 15px rgba(0, 255, 163, 0.35);
+}
+
+.hud-glow-crimson {
+  box-shadow: 0 0 15px rgba(255, 51, 102, 0.4);
+}
+
+.hud-glow-cyan {
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.35);
+}
+
+/* Subtle CRT scanline overlay */
+.cyber-grid {
+  background-image: 
+    linear-gradient(rgba(31, 41, 61, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 41, 61, 0.3) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Animations */
+@keyframes beacon-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.6);
+    opacity: 0.2;
+  }
+}
+
+.animate-beacon {
+  animation: beacon-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes glitch-flicker {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; }
+  93% { opacity: 0.6; }
+  94% { opacity: 1; }
+  98% { opacity: 0.8; }
+}
+
+.animate-glitch {
+  animation: glitch-flicker 4s infinite;
+}
+
+/* Scanning beam effect for AI Engine */
+@keyframes scanline-pass {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(1000%);
+  }
+}
+
+.animate-scan-pass {
+  animation: scanline-pass 2s ease-in-out infinite;
+}
